@@ -50,150 +50,360 @@ namespace Syntax
     Pi : (t : Tm n) -> (body : Tm (S n)) -> Tm n
     ||| The type universe at level `i`.
     Tp : (i : Nat) -> Tm n
-
+  
   %name Tm t, s, t', s', t'', s''
 
-  ||| A context with `n` entries in it.
-  data Ctx : (n : Nat) -> Type where
+namespace Renaming
+  data Renaming : (m : Nat) -> (size : Nat) -> Type where
+    Shift : (n : Nat) -> Renaming n Z
+    Cons : Renaming n k -> Fin n -> Renaming n (S k)
+  
+  %name Renaming r, r', r''
+  
+  weaken : Renaming n k -> Renaming (S n) k
+  weaken (Shift n) = Shift (S n)
+  weaken (Cons r x) = Cons (weaken r) (FS x)
+
+  applyVar : Renaming n k -> Fin k -> Fin n
+  applyVar (Shift _) FZ impossible
+  applyVar (Shift _) (FS _) impossible
+  applyVar (Cons r y) FZ = y
+  applyVar (Cons r y) (FS z) = applyVar r z 
+  
+  ||| Extends a renaming so it works in an extended context.
+  extend : Renaming n k -> Renaming (S n) (S k)
+  extend r = Cons (weaken r) FZ
+  
+  apply : Renaming n k -> Tm k -> Tm n
+  apply r (Var x) = Var (applyVar r x)
+  apply r (Lam t) = Lam (apply (extend r) t)
+  apply r (Pi t body) = Pi (apply r t) (apply (extend r) body)
+  apply r Unit = Unit
+  apply r Top = Top
+  apply r (App t s) = App (apply r t) (apply r s)
+  apply r (Tp i) = Tp i
+  
+  ||| Forms the identity renaming for `k` variables.
+  idRen : (k : Nat) -> Renaming k k
+  idRen Z = Shift Z
+  idRen (S k) = extend (idRen k)
+  
+namespace Subst
+  ||| A simultaneous substitution for `k` variables, using `n` variables.
+  ||| In other words, a transformation of k-contexts into n-contexts.
+  data Subst : (n : Nat) -> (k : Nat) -> Type where
+    Shift : (n : Nat) -> Subst n Z
+    Cons : Subst n k -> Tm n -> Subst n (S k)
+  
+  %name Subst s, s', s'', r, r', r''
+  
+  namespace WeakenTerm
+    ||| For when a term is placed under an additional binder.
+    weaken : Tm n -> Tm (S n)
+    weaken t = apply (weaken (idRen _)) t
+    -- we can just form the identity renaming, which renames each variable to itself,
+    -- and then weaken this renaming so that it renames each variable to itself + 1.
+  
+  namespace WeakenSubst
+    ||| Weakening a substitution allows it to be used in an extended context.
+    weaken : Subst n k -> Subst (S n) k
+    weaken (Shift n) = Shift (S n)
+    weaken (Cons s t) = Cons (weaken s) (weaken t)
+  
+  extendWith : Subst n k -> Tm (S n) -> Subst (S n) (S k)
+  extendWith s t = Cons (weaken s) t
+
+  ||| Extends a substitution to move it under a lambda.
+  extend : Subst n k -> Subst (S n) (S k)
+  extend s = s `extendWith` (Var FZ)
+  
+  ||| Helper for `apply` to look up a term inside the subtitution.
+  applyVar : Subst n k -> Fin k -> Tm n
+  applyVar (Shift _) f = FinZElim f
+  applyVar (Cons s t) FZ = t
+  applyVar (Cons s t) (FS x) = applyVar s x
+
+  ||| Apply a substitution to a term.
+  apply : Subst n k -> Tm k -> Tm n
+  apply s (Var f) = applyVar s f
+  apply s (Lam t) = Lam (apply (extend s) t)
+  apply s (Pi t body) = Pi (apply s t) (apply (extend s) body)
+  apply s Unit = Unit
+  apply s Top = Top
+  apply s (App t t') = App (apply s t) (apply s t')
+  apply s (Tp i) = Tp i
+  
+  ||| (y z) (x y)
+  exTerm1 : Tm 3
+  exTerm1 = App (App (Var 1) (Var 2)) (App (Var 0) (Var 1))
+
+  ||| Constructs the identity substitution for `n` free variables.
+  idSub : (k : Nat) -> Subst k k
+  idSub Z = Shift Z
+  idSub (S k) = extend (idSub k)
+
+  exTerm2 : Tm 2
+  exTerm2 = App (Lam exTerm1) Unit
+  
+namespace SubApply
+  ||| Apply a substitution to a substitution.
+  ||| Notice that this is transitivity, since the `k` index is squeezed out.
+  apply : (s : Subst n k) -> (r : Subst k l) -> Subst n l
+  apply _ (Shift _) = Shift _
+  apply s (Cons r' t) = Cons (apply s r') (apply s t)
+  
+namespace SubApplyRen
+  apply : (s : Subst n k) -> (r : Renaming k l) -> Subst n l
+  apply s (Shift k) = Shift _
+  apply s (Cons r x) = Cons (apply s r) (applyVar s x)
+  
+  swapRenamingVar : (s : Subst k n) -> (x : Fin n) ->
+                    apply (weaken (idRen k)) (applyVar s x)
+                    =
+                    applyVar (extend s) (applyVar (weaken (idRen n)) x)
+  swapRenamingVar (Shift k) x = FinZElim x
+  swapRenamingVar (Cons s t) FZ = Refl
+  swapRenamingVar (Cons s t) (FS x) {n = S n} =
+    rewrite swapRenamingVar s x in ?a
+
+  swapRenaming : (s : Subst k n) -> (t : Tm n) ->
+                 apply (weaken (idRen k)) (apply s t) = apply (extend s) (weaken t)
+  swapRenaming s Unit = Refl
+  swapRenaming s Top = Refl
+  swapRenaming s (Var x) = swapRenamingVar s x
+  swapRenaming s (App t t') = ?a_4
+  swapRenaming s (Lam t) = ?a_5
+  swapRenaming s (Pi t body) = ?a_8
+  swapRenaming s (Tp i) = Refl
+  
+  distributeWeaken : (s : Subst k n) -> (r : Subst n l) ->
+                     weaken (apply s r) = apply (extend s) (weaken r)
+  distributeWeaken s (Shift n) = Refl
+  distributeWeaken s (Cons r' t) =
+    rewrite distributeWeaken s r' in
+    rewrite swapRenaming s t in
+    Refl
+  
+  distributeExtend : (s : Subst k n) -> (r : Subst n l) ->
+                     extend (apply s r) = apply (extend s) (extend r)
+  distributeExtend s (Shift n) = Refl
+  distributeExtend s (Cons r' t) =
+    rewrite distributeWeaken s r' in
+    rewrite swapRenaming s t in
+    Refl
+
+  liftExtendVar : (s : Subst k n) -> (r : Subst n l) -> (f : Fin (S l)) ->
+                 apply (extend s) (applyVar (extend r) f) = applyVar (apply (extend s) (extend r)) f
+  liftExtendVar _ (Shift _) FZ = Refl
+  liftExtendVar _ (Shift _) (FS x) = FinZElim x
+  liftExtendVar s (Cons r' t) FZ = Refl
+  liftExtendVar s (Cons r' t) (FS x) =
+    let ih = liftExtendVar s r' x in ?a
+  
+  liftExtend : (t : Tm (S l)) -> (s : Subst k n) -> (r : Subst n l) ->
+               apply (extend s) (apply (extend r) t) = apply (apply (extend s) (extend r)) t
+  liftExtend Unit s r = Refl
+  liftExtend Top s r = Refl
+  liftExtend (App t t') s r =
+    rewrite liftExtend t s r in
+    rewrite liftExtend t' s r in
+    Refl
+  liftExtend (Var x) s r = liftExtendVar s r x
+  liftExtend (Lam t) s r = ?a_10
+  liftExtend (Pi t body) s r = ?a_13
+  liftExtend (Tp i) s r = ?a_14
+  
+  liftApplyVar : (s : Subst k n) -> (r : Subst n l) -> (f : Fin l) ->
+                 apply s (applyVar r f) = applyVar (apply s r) f
+  liftApplyVar _ (Shift _) f = FinZElim f
+  liftApplyVar s (Cons s' t) FZ = Refl
+  liftApplyVar s (Cons s' t) (FS x) = ?a --  liftApplyVar s s' x
+  
+  liftApply : (t : Tm l) ->
+              (s : Subst k n) ->
+              (r : Subst n l) ->
+              apply s (apply r t) = apply (apply s r) t
+  liftApply Unit s r = Refl
+  liftApply Top s r = Refl
+  liftApply (Var x) s r = liftApplyVar s r x
+  liftApply (App t t') s r =
+    rewrite liftApply t s r in
+    rewrite liftApply t' s r in
+    Refl
+  liftApply (Lam t) s r =
+    let ih = liftApply t (extend s) (extend r) in
+    rewrite distributeExtend s r in cong ih
+  liftApply (Pi t body) s r =
+    rewrite liftApply t s r in
+    rewrite liftApply body (extend s) (extend r) in
+    rewrite distributeExtend s r in
+    Refl
+  liftApply (Tp i) s r = Refl
+  
+  liftApplyRenVar : (s : Subst k n) -> (r : Renaming n l) -> (f : Fin l) ->
+                    applyVar s (applyVar r f) = applyVar (apply s r) f
+  liftApplyRenVar s (Shift n) f = FinZElim f
+  liftApplyRenVar s (Cons r x) FZ = Refl
+  liftApplyRenVar s (Cons r x) (FS y) = liftApplyRenVar s r y
+  
+  liftApplyRen : (t : Tm l) -> (s : Subst k n) -> (r : Renaming n l) ->
+                 apply s (apply r t) = apply (apply s r) t
+  liftApplyRen (Var x) s r = liftApplyRenVar s r x
+  liftApplyRen Unit s r = Refl
+  liftApplyRen Top s r = Refl
+  liftApplyRen (App t t') s r = ?a_9
+  liftApplyRen (Lam t) s r = ?a_15
+  liftApplyRen (Pi t body) s r = ?a_16
+  liftApplyRen (Tp i) s r = ?a_17
+  
+  renameWeaken : (s : Subst n k) -> (t : Tm n) -> (r : Renaming k l) -> apply (Cons s t) (weaken r) = apply s r
+  renameWeaken s t (Shift k) = Refl
+  renameWeaken s t (Cons r x) =
+    rewrite renameWeaken s t r in
+    Refl
+  
+  applyIdRenRight : (s : Subst n k) -> apply s (idRen k) = s
+  applyIdRenRight (Shift n) = Refl
+  applyIdRenRight (Cons s t) {k = S k} =
+    rewrite renameWeaken s t (idRen k) in
+    rewrite applyIdRenRight s in
+    Refl
+  
+  applyWeaken : (s : Subst n k) -> (t : Tm n) -> (r : Subst k l) -> apply (Cons s t) (weaken r) = apply s r
+  applyWeaken s t (Shift k) = Refl
+  applyWeaken s t (Cons r' t') {k} =
+    rewrite liftApplyRen t' (Cons s t) (weaken (idRen k)) in
+    rewrite renameWeaken s t (idRen k) in
+    rewrite applyIdRenRight s in
+    rewrite applyWeaken s t r' in
+    Refl
+  
+  applyIdRight : (s : Subst n k) -> apply s (idSub k) = s
+  applyIdRight (Shift n) {k = Z} = Refl
+  applyIdRight (Cons s t) {k = S k} =
+    rewrite applyWeaken s t (idSub k) in
+    rewrite applyIdRight s in
+    Refl
+  
+namespace Eval
+  data IsValue : Tm n -> Type where
+    Unit : IsValue Unit
+    Top : IsValue Top
+    Lam : IsValue (Lam t)
+    Pi : IsValue s -> IsValue (Pi s t)
+    Tp : IsValue (Tp i)
+  
+  %name IsValue v, v', v''
+  
+  ||| Forms a substitution to be used for beta reduction, which leaves
+  ||| all variables unchanged except for the first, which is
+  ||| substituted by the given term.
+  single : Tm n -> Subst n (S n)
+  single t = Cons (idSub _) t
+  
+  ||| Perform a beta reduction, substituting `t2` for the head variable of `t1`.
+  beta : (t1 : Tm (S n)) -> (t2 : Tm n) -> Tm n
+  beta t1 t2 = apply (single t2) t1
+  
+  ||| Evaluation relation on terms.
+  data Eval : Tm n -> Tm n -> Type where
+    EvAppLam : Eval (App (Lam body) t) (beta body t)
+    EvAppL : Eval t t' -> Eval (App t s) (App t' s)
+    EvAppR : Eval s s' -> Eval (App t s) (App t s')
+    EvLam : Eval body body' -> Eval (Lam body) (Lam body')
+  
+  %name Eval e, e', e''
+  
+namespace SplitApply
+  -- splitApplyVar : (x : Fin (S k)) -> (s : Subst n k) -> (t : Tm n) ->
+  --                 applyVar (Cons s t) x
+  --                 =
+  --                 apply (single t) (applyVar (extend s) x)
+  -- splitApplyVar FZ s t = Refl
+  -- splitApplyVar (FS x) (Shift n) t = FinZElim x
+  -- splitApplyVar (FS x) (Cons s t') t = 
+  --   let ih = splitApplyVar x s t in ?splitApplyVar_rhs_3
+
+  applySingleWeakenTm : (t : Tm n) -> (t' : Tm n) ->
+                        apply (Cons (idSub n) t) (apply (weaken (idRen n)) t') = t'
+  applySingleWeakenTm t t' =
+    ?applySingleWeakenTm_rhs
+  
+  applySingleWeaken : (s : Subst n k) -> (t : Tm n) -> apply (single t) (weaken s) = s
+  applySingleWeaken (Shift n) t = Refl
+  applySingleWeaken (Cons s t') t =
+    rewrite applySingleWeaken s t in
+    rewrite applySingleWeakenTm t t' in
+    Refl
+  
+  splitApply : (s : Subst n k) -> (t : Tm n) -> Cons s t = apply (single t) (extend s)
+  splitApply (Shift n) t = Refl
+  splitApply (Cons s t') t = ?splitApply_rhs_2
+
+  -- splitApply : (s : Subst n k) -> (t : Tm n) -> (b : Tm (S k)) ->
+  --              apply (Cons s t) b = apply (single t) (apply (extend s) b)
+  -- splitApply s t b =
+  --   rewrite liftApply b (single t) (extend s) in ?splitApply_rhs
+  
+namespace Typing
+  data Ctx : Nat -> Type where
     Nil : Ctx Z
-    ||| Adds an entry to the context.
-    ||| This entry can refer only to previous entries in the context, which is why their indices match.
-    (::) : Tm n -> Ctx n -> Ctx (S n)
+    (::) : Ctx n -> Tm n -> Ctx (S n)
   
   %name Ctx g, g', g'', ctx, ctx', ctx''
   
-  -- extend : Ctx b n -> Ctx (n + b) m -> Ctx b (m + n)
-  -- extend g1 Nil = g1
-  -- extend g1 {m=S m} {b} {n} (t :: g2) =
-  --   let ih = extend g1 g2 in
-  --   let t'' = replace (plusAssociative m n b) {P = \p => Tm p} t in
-  --   t'' :: ih
+  ||| Lookup relation.
+  ||| Looking up `f` in `g` gives `t`.
+  data Lookup : (g : Ctx n) -> (f : Fin n) -> (t : Tm n) -> Type where
+    Here : Lookup (xs :: x) FZ (weaken x)
+    There : Lookup xs f t -> Lookup (xs :: s) (FS f) (weaken t)
   
-  ||| For when a term is placed under an additional binder.
-  weaken : Tm n -> Tm (S n)
-  weaken Unit = Unit
-  weaken Top = Top
-  weaken (App t s) = App (weaken t) (weaken s)
-  weaken (Lam t) = Lam (weaken t)
-  weaken (Var i) = Var (weaken i)
-  weaken (Pi t b) = Pi (weaken t) (weaken b)
-  weaken (Tp i) = Tp i
-  
-  namespace Subst
-    data Subst : (m : Nat) -> (size : Nat) -> Type where
-      Shift : (n : Nat) -> Subst n Z
-      Cons : Subst n k -> Tm (S k + n) -> Subst n (S k)
-  
-    %name Subst s, s', s''
-  
-    ||| Shift a variable index up by n places.
-    shiftVar : (n : Nat) -> Fin k -> Fin (n + k)
-    shiftVar Z f = f
-    shiftVar (S n) f = FS (shiftVar n f)
-  
-    applyVar : Subst n k -> Fin k -> Tm (k + n)
-    applyVar (Shift m) f =
-      rewrite sym (plusZeroRightNeutral m) in Var (shiftVar m f)
-    applyVar (Cons s t) FZ {n} {k=S k} = t
-    applyVar (Cons s t) (FS y) {n} {k=S k} = weaken (applyVar s y)
-  
-    apply : Subst n k -> Tm k -> Tm (k + n)
-    apply s (Var f) = applyVar s f
-    apply s (Lam t) = Lam (apply (Cons s (Var FZ)) t)
-    apply s (Pi t body) = Pi (apply s t) (apply (Cons s (Var FZ)) body)
-    apply s Unit = Unit
-    apply s Top = Top
-    apply s (App t t') = App (apply s t) (apply s t')
-    apply s (Tp i) = Tp i
-  
-    ||| (y z) (x y)
-    exTerm1 : Tm 3
-    exTerm1 = App (App (Var 1) (Var 2)) (App (Var 0) (Var 1))
-  
-    ||| Constructs the identity substitution for `n` free variables.
-    idSub : (n : Nat) -> Subst Z n
-    idSub Z = Shift Z
-    idSub (S n) = Cons (idSub n) (Var FZ)
+  %name Lookup lk, lk', lk''
 
-    -- shift : (cutoff : Nat) -> (d : Nat) -> Tm n -> Tm (d + n)
-    -- shift c d (Var x) = ?a_3
-    -- shift c d Unit = ?a_1
-    -- shift c d Top = ?a_2
-    -- shift c d (App t s) = ?a_4
-    -- shift c d (Lam t) = ?a_5
-    -- shift c d (Pi t body) = ?a_6
-    -- shift c d (Tp i) = ?a_7
+  ||| Typing relation on terms.
+  ||| In context `g`, term `s` has type `t`.
+  data Oft : (g : Ctx n) -> (s : Tm n) -> (t : Tm n) -> Type where
+    Unit : Oft g Unit Top
+    Top : Oft g Top (Tp 0)
+    Pi : Oft g s (Tp i) -> Oft (g :: s) t (Tp j) -> Oft g (Pi s t) (Tp (maximum i j))
+    Lam : Oft g s (Tp i) -> Oft (g :: s) body t -> Oft g (Lam body) (Pi s t)
+    Tp : Oft g (Tp i) (Tp (S i))
+    App : Oft g s (Pi a b) -> Oft g t a -> Oft g (App s t) (apply (Cons (idSub _) t) b)
+    Var : Lookup g f t -> Oft g (Var f) t
   
-    -- ||| A substitution of a single term.
-    -- ||| @param n The size of the context in which the term is embedded.
-    -- data Subst : (n : Nat) -> Type where
-    --   MkSubst : -> Subst (S n)
+  %name Oft d, d', d''
   
-    -- applyId : Subst Z -> Tm n -> Tm n
-    -- applyId s Unit = Unit
-    -- applyId s Top = Top
-    -- applyId s (App t t') = App (applyId s t) (applyId s t')
-    -- applyId s (Lam t) = let s' = Cons (Var FZ) s in ?a
-    -- applyId s (Var x) = ?a_3
-    -- applyId s (Pi t body) = ?a_6
-    -- applyId s (Tp i) = ?a_7
+namespace SubstTyping
+  ||| A well-typed substitution is a transformation of contexts.
+  data SubstOft : Ctx n -> Ctx k -> Subst n k -> Type where
+    Nil : SubstOft g Nil (Shift _)
+    Cons : SubstOft g d s -> Oft g t a -> SubstOft g (d :: a) (Cons s t)
   
---     ||| The identity substitution for a context.
---     subId : (g : Ctx b n) -> Subst g g
---     subId Nil = Nil
---     subId (t :: g) {b} = Cons (subId g) (t :: Nil) (Var FZ)
---   
---     applySub : {g : Ctx Z n} -> {d : Ctx Z m} -> Subst g d -> Tm n -> Tm m
---     applySub s Unit = Unit
---     applySub s Top = Top
---     applySub s (Var x) = ?a_3
---     applySub s (App t1 t2) = App (applySub s t1) (applySub s t2)
---     applySub s (Lam t) =
---       let s' = Cons (:: Nil) s in
---       ?a  -- Lam (applySub (Cons (Var FZ) s) t)
---     applySub s (Pi t body) = ?a_6
---     applySub s (Tp i) = (Tp i)
---   
---     -- subTrans : {g1 : Ctx b n1} -> {g2 : Ctx b n2} -> {g3 : Ctx b n3} ->
---     --            Subst g1 g2 -> Subst g2 g3 -> Subst g1 g3
---     -- subTrans s [] = s
---     -- subTrans s (Cons {d} s' d' tm) = ?a_2
---   
---   ||| Weaken by multiple steps.
---   weakenTo : Tm k -> Diff k n -> Tm n
---   weakenTo t DZ = t
---   weakenTo t (DS d) = weakenTo (weaken t) d
---   
---   ||| Represents looking up index `i` in context `ctx` with `n` entries to get term `t`
---   ||| referring to `k` earlier variables, where the difference between `k` and `n` is `d`.
---   data Lookup : (i : Fin (n + b)) -> (ctx : Ctx b n) -> (d : Diff (k + b) (n + b)) -> (t : Tm (k + b)) -> Type where
---     Here : Lookup FZ (t :: ctx') diffSucc t
---     There : Lookup f ctx d t -> Lookup (FS f) (s :: ctx) (diffSuccRight d) t
---   
---   -- ||| Looks up a type in the context.
---   -- lookup : (i : Fin (b + n)) -> (ctx : Ctx b n) -> (k : Nat ** t : Tm k ** d : Diff k n ** Lookup i ctx d t)
---   -- lookup FZ (t :: _) = (_ ** t ** diffSucc ** Here)
---   -- lookup (FS f) (_ :: ctx) =
---   --   let (_ ** t' ** d ** l) = lookup f ctx
---   --   in (_ ** t' ** diffSuccRight d ** There l)
---   
--- namespace Typing
---   -- subCtx : Ctx (S n) -> Diff k n -> Tm k -> Ctx n
---   -- subCtx (s :: ctx) DZ t = t
---   -- subCtx (s :: ctx) (DS x) t = ?a_2
--- 
---   ||| Typing assignment.
---   data Oft : Ctx b n -> Tm (n + b) -> Tm (n + b) -> Type where
---     ||| The type universes are contained one in the other.
---     Tp : Oft ctx (Tp n) (Tp (S n))
---     ||| The unit term has the unit type.
---     Unit : Oft ctx Unit Top
---     ||| The unit type is a basic type.
---     Top : Oft ctx Top (Tp 0)
---     ||| Variables get their types from looking up in the context.
---     Var : Lookup f ctx d tp -> Oft ctx (Var f) tp
---     Pi : Oft ctx a (Tp l1) -> Oft (tp :: ctx) b (Tp l2) -> Oft ctx (Pi a b) (Tp (maximum l1 l2))
---     -- ||| Applications get their types by performing substitutions.
---     -- App : Oft ctx t1 (Pi a b) -> Oft ctx t2 a -> Oft ctx (App t1 t2) -> 
---     --       Subst 
---  
+  %name SubstOft sd, sd', sd''
+  
+namespace SubstLemma
+  ||| Substitution lemma.
+  ||| Application of a well-typed substitution preserves typing.
+  subst : SubstOft g d s -> Oft d t a -> Oft g (apply s t) (apply s a)
+  subst sd Unit = Unit
+  subst sd Top = Top
+  subst sd Tp = Tp
+  subst sd (Pi d d') = ?a_6
+  subst sd (Lam d d') = ?a_7
+  subst sd (Var lk) = ?subst_8
+  subst sd {s} (App d d' {t} {b}) =
+    let ih1 = subst sd d in
+    let ih2 = subst sd d' in
+    -- rewrite liftApply b s (single t) in
+    -- rewrite applyIdRight s in
+    let ideal = App ih1 ih2 in
+    ?subst_9
+  
+  {-
+namespace TypePreservation
+  pres : Eval t t' -> Oft g t a -> Oft g t' a
+  pres EvAppLam (App (Lam t b) d) = ?a
+  pres (EvAppL x) d = ?a_2
+  pres (EvAppR x) d = ?a_3
+  pres (EvLam x) d = ?a_4
+  -}
