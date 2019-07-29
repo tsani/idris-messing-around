@@ -194,97 +194,93 @@ isSetℤ = Discrete→isSet discreteℤ
 normalizeℤ : ℤ -> ℤ
 normalizeℤ n = int→ℤ (ℤ→int n)
 
--- Direct definition of addition on ℤ
-_ℤ+_ : ℤ -> ℤ -> ℤ
-n₁ ℤ+ zero = n₁
-n₁ ℤ+ succ n₂ = succ (n₁ ℤ+ n₂)
-n₁ ℤ+ pred n₂ = pred (n₁ ℤ+ n₂)
-n₁ ℤ+ succ-pred n₂ i = succ-pred (n₁ ℤ+ n₂) i
-n₁ ℤ+ pred-succ n₂ i = pred-succ (n₁ ℤ+ n₂) i
-n₁ ℤ+ trunc n₂ n₃ x y i i₁ = trunc (n₁ ℤ+ n₂) (n₁ ℤ+ n₃) (cong (n₁ ℤ+_) x) (cong (n₁ ℤ+_) y) i i₁
-  -- ℤ-rec.f trunc n₁ succ pred succ-pred pred-succ n₂
-infixl 15 _ℤ+_
-
-ℤ+zero : ∀ m -> m ℤ+ zero ≡ m
-ℤ+zero m = refl
-
-ℤ+succ : ∀ m n -> m ℤ+ (succ n) ≡ succ (m ℤ+ n)
-ℤ+succ m n = refl
-
-ℤ+pred : ∀ m n -> m ℤ+ (pred n) ≡ pred (m ℤ+ n)
-ℤ+pred m n = refl
-
-ℤ+-assoc : ∀ n m k -> n ℤ+ m ℤ+ k ≡ n ℤ+ (m ℤ+ k)
-ℤ+-assoc n m zero = refl
-ℤ+-assoc n m (succ k) = cong succ (ℤ+-assoc n m k)
-ℤ+-assoc n m (pred k) = cong pred (ℤ+-assoc n m k)
-ℤ+-assoc n m (succ-pred k i) = cong (λ p -> succ-pred p i) (ℤ+-assoc n m k)
-ℤ+-assoc n m (pred-succ k i) = cong (λ p -> pred-succ p i) (ℤ+-assoc n m k)
-ℤ+-assoc n m (trunc k k₁ p q i j) =
-    isOfHLevel→isOfHLevelDep {n = 2} (λ _ → isProp→isSet (trunc _ _))
-      (ℤ+-assoc n m k)
-      (ℤ+-assoc n m k₁)
-      (cong (ℤ+-assoc n m) p)
-      (cong (ℤ+-assoc n m) q)
-      (trunc k k₁ p q) i j
-
-  -- ℤ-elim-prop.f (trunc _ _) refl
-  -- (λ x → cong succ x)
-  -- (λ x → cong pred x)
-
-zeroℤ+ : ∀ n -> zero ℤ+ n ≡ n
-zeroℤ+ zero = refl
-zeroℤ+ (succ n) = cong succ (zeroℤ+ n)
-zeroℤ+ (pred n) = cong pred (zeroℤ+ n)
-zeroℤ+ (succ-pred n i) = cong (λ p -> succ-pred p i) (zeroℤ+ n) 
-zeroℤ+ (pred-succ n i) = cong (λ p -> pred-succ p i) (zeroℤ+ n)
-zeroℤ+ (trunc n n₁ x y i i₁) =
-    isOfHLevel→isOfHLevelDep {n = 2} (λ _ → isProp→isSet (trunc _ _))
-      (zeroℤ+ n)
-      (zeroℤ+ n₁)
-      (cong zeroℤ+ x)
-      (cong zeroℤ+ y)
-      (trunc n n₁ x y) i i₁
-  -- ℤ-elim-prop.f (trunc _ _) refl (λ x → cong succ x) (λ x → cong pred x)
-
-succℤ+ : ∀ m n -> succ m ℤ+ n ≡ succ (m ℤ+ n)
-succℤ+ m zero = refl
-succℤ+ m (succ n) = cong succ (succℤ+ m n)
-succℤ+ m (pred n) = cong pred (succℤ+ m n) ∙ pred-succ (m ℤ+ n) ∙ sym (succ-pred (m ℤ+ n))
-succℤ+ m (succ-pred n i) = {!!}
-succℤ+ m (pred-succ n i) = {!!}
-succℤ+ m (trunc n n₁ x y i i₁) = {!!}
-  -- ℤ-elim-prop.f (trunc _ _) refl
-  -- (λ x → cong succ x)
-  -- (λ x -> cong pred x ∙ pred-succ _ ∙ sym (succ-pred _))
-
-predℤ+ : ∀ m n -> pred m ℤ+ n ≡ pred (m ℤ+ n)
-predℤ+ m =
-  ℤ-elim-prop.f (trunc _ _) refl
-  (λ x → cong succ x ∙ succ-pred _ ∙ sym (pred-succ _))
-  (λ x -> cong pred x)
-
-ℤ+-comm : ∀ n m -> m ℤ+ n ≡ n ℤ+ m
-ℤ+-comm n =
-  ℤ-elim-prop.f (trunc _ _) (zeroℤ+ n)
-  (λ {z} x → succℤ+ z n ∙ cong succ x)
-  (λ {z} x → predℤ+ z n ∙ cong pred x)
-
-+ℤ-zero : ∀ n -> n ℤ+ -ℤ n ≡ zero
-+ℤ-zero =
-  ℤ-elim-prop.f (trunc _ _) refl
-  (λ {z} x → succℤ+ _ (-ℤ succ z) ∙ succ-pred _ ∙ x)
-  (λ {z} x → predℤ+ _ (-ℤ pred z) ∙ pred-succ _ ∙ x)
-
--ℤ+zero : ∀ n -> (-ℤ n) ℤ+ n ≡ zero
--ℤ+zero n = sym (ℤ+-comm (-ℤ n) n) ∙ +ℤ-zero n
-
--ℤℤ+-ℤ : ∀ n m -> (-ℤ n) ℤ+ (-ℤ m) ≡ -ℤ (n ℤ+ m)
--ℤℤ+-ℤ n =
-  ℤ-elim-prop.f (trunc _ _)
-    refl
-    (λ {z} x -> cong pred x)
-    (λ {z} x -> cong succ x)
+abstract
+  -- Direct definition of addition on ℤ
+  _ℤ+_ : ℤ -> ℤ -> ℤ
+  n₁ ℤ+ zero = n₁
+  n₁ ℤ+ succ n₂ = succ (n₁ ℤ+ n₂)
+  n₁ ℤ+ pred n₂ = pred (n₁ ℤ+ n₂)
+  n₁ ℤ+ succ-pred n₂ i = succ-pred (n₁ ℤ+ n₂) i
+  n₁ ℤ+ pred-succ n₂ i = pred-succ (n₁ ℤ+ n₂) i
+  n₁ ℤ+ trunc n₂ n₃ x y i i₁ = trunc (n₁ ℤ+ n₂) (n₁ ℤ+ n₃) (cong (n₁ ℤ+_) x) (cong (n₁ ℤ+_) y) i i₁
+    -- ℤ-rec.f trunc n₁ succ pred succ-pred pred-succ n₂
+  infixl 15 _ℤ+_
+  
+  ℤ+zero : ∀ m -> m ℤ+ zero ≡ m
+  ℤ+zero m = refl
+  
+  ℤ+succ : ∀ m n -> m ℤ+ (succ n) ≡ succ (m ℤ+ n)
+  ℤ+succ m n = refl
+  
+  ℤ+pred : ∀ m n -> m ℤ+ (pred n) ≡ pred (m ℤ+ n)
+  ℤ+pred m n = refl
+  
+  ℤ+-assoc : ∀ n m k -> n ℤ+ m ℤ+ k ≡ n ℤ+ (m ℤ+ k)
+  ℤ+-assoc n m zero = refl
+  ℤ+-assoc n m (succ k) = cong succ (ℤ+-assoc n m k)
+  ℤ+-assoc n m (pred k) = cong pred (ℤ+-assoc n m k)
+  ℤ+-assoc n m (succ-pred k i) = cong (λ p -> succ-pred p i) (ℤ+-assoc n m k)
+  ℤ+-assoc n m (pred-succ k i) = cong (λ p -> pred-succ p i) (ℤ+-assoc n m k)
+  ℤ+-assoc n m (trunc k k₁ p q i j) =
+      isOfHLevel→isOfHLevelDep {n = 2} (λ _ → isProp→isSet (trunc _ _))
+        (ℤ+-assoc n m k)
+        (ℤ+-assoc n m k₁)
+        (cong (ℤ+-assoc n m) p)
+        (cong (ℤ+-assoc n m) q)
+        (trunc k k₁ p q) i j
+  
+    -- ℤ-elim-prop.f (trunc _ _) refl
+    -- (λ x → cong succ x)
+    -- (λ x → cong pred x)
+  
+  zeroℤ+ : ∀ n -> zero ℤ+ n ≡ n
+  zeroℤ+ zero = refl
+  zeroℤ+ (succ n) = cong succ (zeroℤ+ n)
+  zeroℤ+ (pred n) = cong pred (zeroℤ+ n)
+  zeroℤ+ (succ-pred n i) = cong (λ p -> succ-pred p i) (zeroℤ+ n) 
+  zeroℤ+ (pred-succ n i) = cong (λ p -> pred-succ p i) (zeroℤ+ n)
+  zeroℤ+ (trunc n n₁ x y i i₁) =
+      isOfHLevel→isOfHLevelDep {n = 2} (λ _ → isProp→isSet (trunc _ _))
+        (zeroℤ+ n)
+        (zeroℤ+ n₁)
+        (cong zeroℤ+ x)
+        (cong zeroℤ+ y)
+        (trunc n n₁ x y) i i₁
+    -- ℤ-elim-prop.f (trunc _ _) refl (λ x → cong succ x) (λ x → cong pred x)
+  
+  succℤ+ : ∀ m n -> succ m ℤ+ n ≡ succ (m ℤ+ n)
+  succℤ+ m =
+    ℤ-elim-prop.f (trunc _ _) refl
+    (λ x → cong succ x)
+    (λ x -> cong pred x ∙ pred-succ _ ∙ sym (succ-pred _))
+  
+  predℤ+ : ∀ m n -> pred m ℤ+ n ≡ pred (m ℤ+ n)
+  predℤ+ m =
+    ℤ-elim-prop.f (trunc _ _) refl
+    (λ x → cong succ x ∙ succ-pred _ ∙ sym (pred-succ _))
+    (λ x -> cong pred x)
+  
+  ℤ+-comm : ∀ n m -> m ℤ+ n ≡ n ℤ+ m
+  ℤ+-comm n =
+    ℤ-elim-prop.f (trunc _ _) (zeroℤ+ n)
+    (λ {z} x → succℤ+ z n ∙ cong succ x)
+    (λ {z} x → predℤ+ z n ∙ cong pred x)
+  
+  +ℤ-zero : ∀ n -> n ℤ+ -ℤ n ≡ zero
+  +ℤ-zero =
+    ℤ-elim-prop.f (trunc _ _) refl
+    (λ {z} x → succℤ+ _ (-ℤ succ z) ∙ succ-pred _ ∙ x)
+    (λ {z} x → predℤ+ _ (-ℤ pred z) ∙ pred-succ _ ∙ x)
+  
+  -ℤ+zero : ∀ n -> (-ℤ n) ℤ+ n ≡ zero
+  -ℤ+zero n = sym (ℤ+-comm (-ℤ n) n) ∙ +ℤ-zero n
+  
+  -ℤℤ+-ℤ : ∀ n m -> (-ℤ n) ℤ+ (-ℤ m) ≡ -ℤ (n ℤ+ m)
+  -ℤℤ+-ℤ n =
+    ℤ-elim-prop.f (trunc _ _)
+      refl
+      (λ {z} x -> cong pred x)
+      (λ {z} x -> cong succ x)
 
 ℤ*-lem1 : (m n : ℤ) -> m ℤ+ ((-ℤ m) ℤ+ n) ≡ n
 ℤ*-lem1 m n = sym (ℤ+-assoc m (-ℤ m) n) ∙ cong (λ p -> p ℤ+ n) (+ℤ-zero m) ∙ zeroℤ+ n 
@@ -292,59 +288,66 @@ predℤ+ m =
 ℤ*-lem2 : (m n : ℤ) -> (-ℤ m) ℤ+ (m ℤ+ n) ≡ n
 ℤ*-lem2 m n = sym (ℤ+-assoc (-ℤ m) m n) ∙ cong (λ p -> p ℤ+ n) (-ℤ+zero m) ∙ zeroℤ+ n
 
-infixl 20 _ℤ*_
-_ℤ*_ : ℤ → ℤ → ℤ
-m ℤ* zero = zero
-m ℤ* succ n = m ℤ+ (m ℤ* n)
-m ℤ* pred n = (-ℤ m) ℤ+ (m ℤ* n)
-m ℤ* succ-pred n i = ℤ*-lem1 m (m ℤ* n) i 
-m ℤ* pred-succ n i = ℤ*-lem2 m (m ℤ* n) i
-m ℤ* trunc n n₁ x y i i₁ = trunc (m ℤ* n) (m ℤ* n₁) (cong _ x) (cong _ y) i i₁
-  -- ℤ-rec.f trunc zero (λ n -> m ℤ+ n) (λ n -> (-ℤ m) ℤ+ n)
-  -- (λ n -> ℤ*-lem1 m n)
-  -- (λ n -> ℤ*-lem2 m n)
-
-ℤ*zero : ∀ m -> m ℤ* zero ≡ zero
-ℤ*zero m = refl
-
--- m * S Z = m + (m * Z) = m
-ℤ*one : ∀ m -> m ℤ* succ zero ≡ m
-ℤ*one m = ℤ+zero m
-
-ℤ*neg : ∀ m -> m ℤ* pred zero ≡ -ℤ m
-ℤ*neg m = ℤ+zero _
-
-ℤ*pred : ∀ m n -> m ℤ* pred n ≡ (-ℤ m) ℤ+ (m ℤ* n)
-ℤ*pred m = ℤ-elim-prop.f
-  {B = λ n -> m ℤ* pred n ≡ (-ℤ m) ℤ+ (m ℤ* n)}
-  (trunc _ _)
-  refl
-  (λ _ → refl)
-  (λ _ → refl)
-
-ℤ*succ : ∀ m n -> m ℤ* succ n ≡ m ℤ+ (m ℤ* n)
-ℤ*succ m =
-  ℤ-elim-prop.f
-  (trunc _ _)
-  refl
-  (λ _ → refl)
-  λ _ → refl
+abstract
+  infixl 20 _ℤ*_
+  _ℤ*_ : ℤ → ℤ → ℤ
+  m ℤ* zero = zero
+  m ℤ* succ n = m ℤ+ (m ℤ* n)
+  m ℤ* pred n = (-ℤ m) ℤ+ (m ℤ* n)
+  m ℤ* succ-pred n i = ℤ*-lem1 m (m ℤ* n) i 
+  m ℤ* pred-succ n i = ℤ*-lem2 m (m ℤ* n) i
+  m ℤ* trunc n n₁ x y i i₁ = trunc (m ℤ* n) (m ℤ* n₁) (cong _ x) (cong _ y) i i₁
+    -- ℤ-rec.f trunc zero (λ n -> m ℤ+ n) (λ n -> (-ℤ m) ℤ+ n)
+    -- (λ n -> ℤ*-lem1 m n)
+    -- (λ n -> ℤ*-lem2 m n)
+  
+  ℤ*zero : ∀ m -> m ℤ* zero ≡ zero
+  ℤ*zero m = refl
+  
+  -- m * S Z = m + (m * Z) = m
+  ℤ*one : ∀ m -> m ℤ* succ zero ≡ m
+  ℤ*one m = ℤ+zero m
+  
+  ℤ*neg : ∀ m -> m ℤ* pred zero ≡ -ℤ m
+  ℤ*neg m = ℤ+zero _
+  
+  ℤ*pred : ∀ m n -> m ℤ* pred n ≡ (-ℤ m) ℤ+ (m ℤ* n)
+  ℤ*pred m =
+    ℤ-elim-prop.f
+      {B = λ n -> m ℤ* pred n ≡ (-ℤ m) ℤ+ (m ℤ* n)}
+      (trunc _ _)
+      refl
+      (λ _ → refl)
+      (λ _ → refl)
+  
+  ℤ*succ : ∀ m n -> m ℤ* succ n ≡ m ℤ+ (m ℤ* n)
+  ℤ*succ m =
+    ℤ-elim-prop.f
+    (trunc _ _)
+    refl
+    (λ _ → refl)
+    λ _ → refl
 
 ℤ*-ℤ : ∀ n m -> n ℤ* (-ℤ m) ≡ -ℤ (n ℤ* m)
-ℤ*-ℤ n zero = refl
-ℤ*-ℤ n (succ m) = {!!}
-ℤ*-ℤ n (pred m) = {!!}
-ℤ*-ℤ n (succ-pred m i) = {!!}
-ℤ*-ℤ n (pred-succ m i) = {!!}
-ℤ*-ℤ n (trunc m m₁ x y i i₁) = {!!}
-  -- ℤ-elim-prop.f (trunc _ _)
-  --   refl
-  --   (λ {z} x →
-  --     cong (λ p -> n ℤ* p) (-ℤsucc z)
-  --     ∙ ℤ*pred n (-ℤ z)
-  --     ∙ cong (λ p -> (-ℤ n) ℤ+ p) x
-  --     ∙ -ℤℤ+-ℤ n (n ℤ* z)
-  --     ∙ cong -ℤ_ {!!}) {!!}
+ℤ*-ℤ n =
+  ℤ-elim-prop.f (trunc _ _)
+    (cong (λ p -> n ℤ* p) -ℤzero
+      ∙ ℤ*zero n
+      ∙ sym -ℤzero
+      ∙ sym (cong -ℤ_ (ℤ*zero n)))
+    (λ {z} x →
+      cong (λ p -> n ℤ* p) (-ℤsucc z)
+      ∙ ℤ*pred n (-ℤ z)
+      ∙ cong (λ p -> (-ℤ n) ℤ+ p) x
+      ∙ -ℤℤ+-ℤ n (n ℤ* z)
+      ∙ sym (cong -ℤ_ (ℤ*succ n z)))
+    (λ {z} x →
+      cong (λ p -> n ℤ* p) (-ℤpred z)
+      ∙ ℤ*succ n (-ℤ z)
+      ∙ (cong (λ p -> n ℤ+ p) x
+      ∙ sym (cong (λ p -> p ℤ+ (-ℤ (n ℤ* z))) (-ℤ-involutive n))
+      ∙ -ℤℤ+-ℤ (-ℤ n) (n ℤ* z))
+      ∙ sym (cong -ℤ_ (ℤ*pred n z)))
 
 zeroℤ* : ∀ m -> zero ℤ* m ≡ zero
 zeroℤ* = ℤ-elim-prop.f
@@ -452,10 +455,26 @@ predℤ* m = ℤ-elim-prop.f
   (ℤ*zero (n ℤ* m) ∙ sym (ℤ*zero n) ∙ sym (cong (λ p -> n ℤ* p) (ℤ*zero m)))
   (λ {z} x →
      ℤ*succ (n ℤ* m) z
-     ∙ cong (λ p -> n ℤ* m ℤ+ p) refl
+     ∙ cong (λ p -> n ℤ* m ℤ+ p) x
      ∙ sym (ℤ*-dist n m (m ℤ* z))
-     ∙ sym (cong (λ p -> n ℤ* p) (ℤ*succ m z))
-  )
+     ∙ sym (cong (λ p -> n ℤ* p) (ℤ*succ m z)))
   (λ {z} x → 
-     (((ℤ*pred (n ℤ* m) z ∙ {!!}) ∙ cong (λ p -> n ℤ* (-ℤ m) ℤ+ p) x) ∙ sym (ℤ*-dist n (-ℤ m) (m ℤ* z))) ∙ sym (cong (λ p -> n ℤ* p) (ℤ*pred m z)))
+     ℤ*pred (n ℤ* m) z
+     ∙ sym (cong (λ p -> p ℤ+ n ℤ* m ℤ* z) (ℤ*-ℤ n m))
+     ∙ cong (λ p -> n ℤ* (-ℤ m) ℤ+ p) x
+     ∙ sym (ℤ*-dist n (-ℤ m) (m ℤ* z))
+     ∙ sym (cong (λ p -> n ℤ* p) (ℤ*pred m z)))
+
+ℤ*-comm : ∀ n m -> n ℤ* m ≡ m ℤ* n
+ℤ*-comm n = ℤ-elim-prop.f
+  (trunc _ _)
+  (ℤ*zero n ∙ sym (zeroℤ* n))
+  (λ {z} x →
+    ℤ*succ n z
+    ∙ cong (λ p -> n ℤ+ p) x
+    ∙ sym (succℤ* z n))
+  λ {z} x →
+    ℤ*pred n z
+    ∙ cong (λ p -> (-ℤ n) ℤ+ p) x
+    ∙ sym (predℤ* z n)
 
